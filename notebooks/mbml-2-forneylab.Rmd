@@ -1,0 +1,80 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.6.0
+  kernelspec:
+    display_name: Julia 1.4.2
+    language: julia
+    name: julia-1.4
+---
+
+NOTE: 
+
+* ForneyLabdoesn't have Bollean factors, see github issue.
+* Notebook doesn't work.
+
+```{julia}
+using ForneyLab
+```
+
+```{julia}
+g = FactorGraph()
+
+A = [0.9 0.2; 0.1 0.8]
+
+# prior statistics
+# p_csharp = placeholder(:p_csharp)
+# p_sql = placeholder(:p_sql)
+
+# priors
+@RV skill_csharp ~ Bernoulli(0.5) # p_csharp
+@RV skill_sql ~ Bernoulli(0.5) # p_sql
+
+# @RV skill_both = skill_csharp * skill_sql
+# @RV skill_both ~ And(skill_csharp, skill_sql) ## delta(z, (skill_csharp * skill_sql))
+
+# # observables
+@RV ans_1 ~ Transition(skill_csharp, A)
+@RV ans_2 ~ Transition(skill_sql, A)
+# @RV ans_3 = skill_both # + 1
+
+# # Data placeholder
+placeholder(ans_1, :ans_1)
+placeholder(ans_2, :ans_2)
+# placeholder(ans_3, :ans_3)
+;
+```
+
+```{julia}
+ForneyLab.draw(g)
+```
+
+```{julia}
+algo = sumProductAlgorithm([skill_csharp, skill_sql]) # Figure out a schedule and compile to Julia code
+source_code = algorithmSourceCode(algo)
+println(source_code)
+```
+
+```{julia}
+algo
+```
+
+```{julia}
+eval(Meta.parse(source_code));
+```
+
+```{julia}
+# Prepare data dictionary and prior statistics
+data = Dict(
+    :ans     => [0, 1, 1],
+    :p_csharp => 0.5,
+    :p_sql => 0.5
+)
+
+# Execute algorithm
+marginals = step!(data);
+```

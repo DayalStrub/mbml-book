@@ -1,0 +1,156 @@
+---
+jupyter:
+  jupytext:
+    text_representation:
+      extension: .Rmd
+      format_name: rmarkdown
+      format_version: '1.2'
+      jupytext_version: 1.13.8
+  kernelspec:
+    display_name: Python 3 (ipykernel)
+    language: python
+    name: python3
+---
+
+# Chapter 2: Assessing people's skills
+
+
+## Set up
+
+```{python}
+# # !rm -f *.svg *.gv ## remove all previously generated graph files
+```
+
+```{python}
+import sys
+sys.path.append("../src")
+
+import utils
+```
+
+```{python}
+sys.path.append("/root/dotNet/libs")
+
+import clr
+clr.AddReference('System.Memory')
+clr.AddReference("Microsoft.ML.Probabilistic")
+clr.AddReference("Microsoft.ML.Probabilistic.Compiler")
+```
+
+```{python}
+from System import Boolean, Double, Int32, Array
+from Microsoft.ML.Probabilistic import *
+from Microsoft.ML.Probabilistic.Distributions import Bernoulli
+from Microsoft.ML.Probabilistic.Models import Variable, InferenceEngine
+from Microsoft.ML.Probabilistic.Factors import BooleanAndOp, Factor
+```
+
+```{python}
+import pandas as pd
+```
+
+## 2.2 Testing out the model
+
+```{python}
+def add_noise(variable_in, name_out, probability_if_true, probability_if_not_true):
+    is_correct = Variable.New[Boolean]().Named(name_out)
+    ## if block: variable_in == True
+    if_var = Variable.If(variable_in)
+    is_correct.SetTo(Variable.Bernoulli(probability_if_true))
+    if_var.Dispose()
+    ## else block
+    if_var = Variable.IfNot(variable_in)
+    is_correct.SetTo(Variable.Bernoulli(probability_if_not_true))
+    if_var.Dispose()
+    return is_correct
+```
+
+```{python}
+## prior on skills
+csharp = Variable.Bernoulli(0.5).Named("csharp")
+sql = Variable.Bernoulli(0.5).Named("sql")
+
+## combined skill
+has_skill = csharp.op_BitwiseAnd(csharp, sql).Named("has_skill")
+# has_skill = Variable[Boolean].Factor(Factor.And, csharp, sql)
+
+## adding noise
+probability_if_true = 0.9
+probability_if_not_true = 0.2
+
+is_correct_1 = add_noise(csharp, "is_correct_1", probability_if_true, probability_if_not_true)
+is_correct_2 = add_noise(sql, "is_correct_2", probability_if_true, probability_if_not_true)
+is_correct_3 = add_noise(has_skill, "is_correct_3", probability_if_true, probability_if_not_true)
+```
+
+```{python}
+engine = InferenceEngine()
+engine.ModelName = 'mbml_2'
+engine.ShowFactorGraph = True
+```
+
+```{python}
+marginal = engine.Infer(csharp);
+```
+
+```{python}
+utils.infernet.plot_graph(engine.ModelName)
+```
+
+```{python}
+print(f"Prior probability ...: {marginal}")
+```
+
+```{python}
+is_correct_1.ObservedValue = True
+is_correct_2.ObservedValue = False
+is_correct_3.ObservedValue = False
+```
+
+```{python}
+marginal = engine.Infer(csharp)
+```
+
+```{python}
+utils.infernet.plot_graph(engine.ModelName)
+```
+
+```{python}
+print(f"Posterior probability ...: {marginal}")
+```
+
+```{python}
+print(engine.Infer(sql))
+```
+
+```{python}
+## NOTE: This is question 4
+df = pd.DataFrame({
+    "is_correct_1": [False, True, False, True, False, True, False, True],
+    "is_correct_2": [False, False, True, True, False, False, True, True],
+    "is_correct_3": [False, False, False, False, True, True, True, True],
+})
+
+p_csharp = []
+p_sql = []
+
+for row in df.itertuples(index=False):
+    is_correct_1.ObservedValue = row.is_correct_1
+    is_correct_2.ObservedValue = row.is_correct_2
+    is_correct_3.ObservedValue = row.is_correct_3
+    p_csharp.append(str(engine.Infer(csharp)))
+    p_sql.append(str(engine.Infer(sql)))
+    
+df["p_csharp"] = p_csharp
+df["p_sql"] = p_sql
+
+df
+```
+
+```{python}
+
+```
+
+```{python}
+
+```
